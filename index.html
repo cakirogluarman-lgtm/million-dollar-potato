@@ -493,6 +493,9 @@
 <script>
 /* LIVE MODE — totals, ledger and map pings come from /api/stats (real Stripe data).
    DEMO simulator only runs when previewing the file locally (file://). */
+try{ history.scrollRestoration = 'manual'; }catch(e){}
+window.scrollTo(0,0);
+window.addEventListener('load', ()=>window.scrollTo(0,0));
 const GOAL = 1000000;
 const DEMO = location.protocol === 'file:';
 const LAUNCH = new Date('2026-06-12');
