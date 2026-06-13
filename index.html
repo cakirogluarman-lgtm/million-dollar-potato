@@ -484,7 +484,7 @@
     <div class="pay-divider" id="payDivider"><span>or</span></div>
     <button class="paybtn ghost" id="cardToggle"><svg width="20" height="15" viewBox="0 0 24 18" style="vertical-align:-2px;margin-right:8px" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="22" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="1" y="4.5" width="22" height="3.5" fill="currentColor"/><rect x="4" y="11.5" width="7" height="2" fill="currentColor"/></svg>pay with card &rarr;</button>
     <div id="peEl" hidden></div>
-    <button class="paybtn" id="payBtn" hidden>pay $1</button>
+    <button class="applepay" id="payBtn"> pay $1 →</button>
     <button class="orcard" id="backupPay">backup: pay on a stripe page &rarr;</button>
     <div class="paid-stamp" id="paidStamp">RECEIVED ✓</div>
   </div>
@@ -758,23 +758,34 @@ function openCheckout(withWheel){
   payNote.textContent = noteFor(payAmount);
   if(withWheel) wheel.querySelectorAll('.wopt').forEach((el,i)=>el.classList.toggle('sel', i===0));
   paidStamp.classList.remove('show');
-  cardToggle.hidden = false; peEl.hidden = true; payBtn.hidden = true;
-  payDivider.style.display = '';
-  payBtn.disabled = false; setPayLabel();
+  // hide all embedded payment UI — we route to Stripe's hosted page (Apple Pay works there)
+  if(typeof ecEl!=='undefined' && ecEl) ecEl.style.display='none';
+  if(typeof peEl!=='undefined' && peEl){ peEl.hidden=true; peEl.style.display='none'; }
+  if(typeof cardToggle!=='undefined' && cardToggle) cardToggle.hidden=true;
+  if(typeof payDivider!=='undefined' && payDivider) payDivider.style.display='none';
+  var bp=document.getElementById('backupPay'); if(bp) bp.style.display='none';
+  payBtn.hidden = false; payBtn.disabled = false; setPayLabel();
   overlay.classList.add('open');
-  setupPayment();
 }
 function closeCheckout(){ overlay.classList.remove('open'); }
 
-document.getElementById('buy').addEventListener('click', ()=>openCheckout(false));
+async function goHosted(qty){
+  try{
+    const r = await fetch('/api/checkout', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({qty: qty})});
+    const d = await r.json();
+    if(d && d.url){ window.location.href = d.url; return; }
+    throw new Error(d && d.error || 'no url');
+  }catch(e){ alert('hmm, try again in a sec'); }
+}
+document.getElementById('buy').addEventListener('click', ()=>{ if(DEMO){ openCheckout(false); return; } goHosted(1); });
 document.getElementById('buyMore').addEventListener('click', ()=>openCheckout(true));
 document.getElementById('closePay').addEventListener('click', closeCheckout);
 overlay.addEventListener('click', e=>{ if(e.target===overlay) closeCheckout(); });
 
 payBtn.addEventListener('click', ()=>{
   if(DEMO){ paidStamp.classList.add('show'); tickSound(); setTimeout(closeCheckout, 900); return; }
-  if(stripe && elements){ doConfirm(); return; }
-  backupCheckout();
+  payBtn.disabled = true; payBtn.textContent = 'opening apple pay…';
+  goHosted(payAmount);
 });
 document.getElementById('backupPay').addEventListener('click', backupCheckout);
 cardToggle.addEventListener('click', showCardForm);
