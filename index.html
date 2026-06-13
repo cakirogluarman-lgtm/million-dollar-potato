@@ -489,7 +489,7 @@
     <div id="peEl" hidden></div>
     <button class="paybtn" id="payBtn" hidden>pay $1</button>
     <button class="orcard" id="backupPay">backup: pay on a stripe page &rarr;</button>
-    <div id="payDbg" style="font-size:10px;color:#999;margin-top:8px;word-break:break-all"></div>
+    <div id="payDbg" style="font-size:11px;color:#111;background:#ffe600;border:2px solid #111;padding:6px;margin-top:10px;word-break:break-all;line-height:1.4"></div>
     <div class="paid-stamp" id="paidStamp">RECEIVED ✓</div>
   </div>
 </div>
@@ -715,9 +715,7 @@ async function setupPayment(){
     ec.on('confirm', doConfirm);
     ec.on('ready', ev => {
       if(!ev.availablePaymentMethods){ payDivider.style.display='none'; showCardForm(); }
-      if(new URLSearchParams(location.search).has('debug')){
-        document.getElementById('payDbg').textContent = 'stripe says: ' + JSON.stringify(ev.availablePaymentMethods) + ' | ua: ' + (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('CriOS') ? 'safari-ish' : 'NOT safari') + ' | applePaySession: ' + (typeof window.ApplePaySession !== 'undefined' ? 'yes, canMakePayments=' + (window.ApplePaySession && ApplePaySession.canMakePayments()) : 'NO');
-      }
+      document.getElementById('payDbg').textContent += '  ||  STRIPE → ' + JSON.stringify(ev.availablePaymentMethods);
     });
     const pe = elements.create('payment', {layout: 'tabs'});
     pe.mount('#peEl');
@@ -779,6 +777,13 @@ function openCheckout(withWheel){
   payDivider.style.display = '';
   payBtn.disabled = false; setPayLabel();
   overlay.classList.add('open');
+  try{
+    var aps = (typeof window.ApplePaySession !== 'undefined');
+    var canPay = aps && ApplePaySession.canMakePayments ? ApplePaySession.canMakePayments() : 'n/a';
+    var isSafari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+    var inApp = /Instagram|FBAN|FBAV|Line|Twitter|TikTok|Snapchat|Telegram/.test(navigator.userAgent);
+    document.getElementById('payDbg').textContent = 'DEVICE → ApplePaySession:' + (aps?'YES':'NO') + ' · canMakePayments:' + canPay + ' · Safari:' + (isSafari?'yes':'NO') + ' · in-app browser:' + (inApp?'YES ('+navigator.userAgent.match(/Instagram|FBAN|FBAV|Line|Twitter|TikTok|Snapchat|Telegram/)+')':'no');
+  }catch(e){ document.getElementById('payDbg').textContent = 'dbg err: '+e.message; }
   setupPayment();
 }
 function closeCheckout(){ overlay.classList.remove('open'); }
