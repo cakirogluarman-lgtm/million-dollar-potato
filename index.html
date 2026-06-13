@@ -486,6 +486,12 @@
     <div id="peEl" hidden></div>
     <button class="paybtn" id="payBtn" hidden>pay $1</button>
     <button class="orcard" id="backupPay">backup: pay on a stripe page &rarr;</button>
+    <div id="nameAsk" hidden style="margin-top:12px">
+      <div style="font-size:13px;margin-bottom:8px">you're in. 🥔 what name goes on the ledger?</div>
+      <input id="nameInput" maxlength="24" placeholder="your name or @handle" style="width:100%;box-sizing:border-box;border:2px solid #111;padding:11px;font-family:inherit;font-size:15px;background:#fff">
+      <button class="applepay" id="nameSave" style="margin-top:8px">put me on the ledger →</button>
+      <button class="orcard" id="nameSkip" style="margin-top:6px">skip</button>
+    </div>
     <div class="paid-stamp" id="paidStamp">RECEIVED ✓</div>
   </div>
 </div>
@@ -736,8 +742,9 @@ async function doConfirm(){
 }
 
 function showPaid(){
-  paidStamp.classList.add('show'); tickSound();
-  setTimeout(()=>{ closeCheckout(); setPayLabel(); }, 1700);
+  tickSound();
+  var piId = result.paymentIntent && result.paymentIntent.id;
+  askForName(piId);
 }
 
 async function backupCheckout(){
@@ -782,19 +789,55 @@ payBtn.addEventListener('click', ()=>{
 document.getElementById('backupPay').addEventListener('click', backupCheckout);
 cardToggle.addEventListener('click', showCardForm);
 
-/* returning from a successful Stripe payment */
-if(new URLSearchParams(location.search).get('paid') === '1'){
-  history.replaceState(null,'',location.pathname);
-  overlay.classList.add('open');
+/* name capture after payment */
+var nameAsk = document.getElementById('nameAsk');
+var nameInput = document.getElementById('nameInput');
+function hidePayUI(){
   wheelwrap.hidden = true;
   payBtn.style.display = 'none';
-  ecEl.style.display = 'none'; peEl.style.display = 'none'; payDivider.style.display = 'none'; cardToggle.hidden = true;
-  document.getElementById('backupPay').style.display = 'none';
+  if(typeof ecEl!=='undefined' && ecEl) ecEl.style.display='none';
+  if(typeof peEl!=='undefined' && peEl) peEl.style.display='none';
+  if(typeof payDivider!=='undefined' && payDivider) payDivider.style.display='none';
+  if(typeof cardToggle!=='undefined' && cardToggle) cardToggle.hidden=true;
+  var bp=document.getElementById('backupPay'); if(bp) bp.style.display='none';
+}
+function finishThankYou(){
+  nameAsk.hidden = true;
   payAmtEl.textContent = 'you’re in.';
   payNote.textContent = 'payment received. the ticker felt it. welcome to history.';
   paidStamp.classList.add('show');
-  tickSound();
 }
+function askForName(piId){
+  hidePayUI();
+  overlay.classList.add('open');
+  paidStamp.classList.remove('show');
+  payAmtEl.textContent = 'paid ✓';
+  payNote.textContent = '';
+  if(!piId){ finishThankYou(); return; }
+  nameAsk.hidden = false;
+  setTimeout(()=>{ try{ nameInput.focus(); }catch(e){} }, 200);
+  function save(){
+    var nm = (nameInput.value||'').trim();
+    document.getElementById('nameSave').disabled = true;
+    if(!nm){ finishThankYou(); return; }
+    fetch('/api/name', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pi: piId, name: nm})})
+      .then(()=>{ poll && poll(); })
+      .finally(finishThankYou);
+  }
+  document.getElementById('nameSave').onclick = save;
+  document.getElementById('nameSkip').onclick = finishThankYou;
+  nameInput.onkeydown = function(e){ if(e.key==='Enter') save(); };
+}
+
+/* returning from a successful Stripe payment (redirect methods) */
+(function(){
+  var q = new URLSearchParams(location.search);
+  if(q.get('paid') === '1' || q.get('payment_intent')){
+    var pi = q.get('payment_intent');
+    history.replaceState(null,'',location.pathname);
+    askForName(pi);
+  }
+})();
 
 /* poke the potato */
 document.getElementById('thePotato').addEventListener('click', tickSound);
