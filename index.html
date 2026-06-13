@@ -708,21 +708,11 @@ async function setupPayment(){
     elements = stripe.elements({clientSecret: d.clientSecret, appearance: {variables: {colorPrimary:'#111111', colorBackground:'#ffffff', colorText:'#111111', borderRadius:'4px', fontFamily:'"Courier New", Courier, monospace'}}});
     const ec = elements.create('expressCheckout', {buttonHeight:48, paymentMethods:{applePay:'always', googlePay:'always', amazonPay:'never', paypal:'never', link:'never'}});
     ec.mount('#ecEl');
-    // authoritative check: does THIS browser actually offer Apple Pay for us?
+    // quiet nudge ONLY for in-app browsers (Instagram etc.) where the OS blocks Apple Pay
     try{
-      var pr = stripe.paymentRequest({country:'US', currency:'usd', total:{label:'potato', amount: payAmount*100}});
-      pr.canMakePayment().then(function(res){
-        var s = document.getElementById('apStatus'); if(!s) return;
-        if(res && res.applePay){ s.textContent='✓ Apple Pay available in this browser'; s.style.color='#1a8a3a'; }
-        else {
-          var ua=navigator.userAgent;
-          var inApp=/Instagram|FBAN|FBAV|Line|TikTok|Snapchat|Telegram|FB_IAB|GitHub/.test(ua);
-          s.textContent = inApp
-            ? '⚠ Apple Pay needs Safari — you\'re in an in-app browser. Tap ••• → Open in Safari'
-            : '⚠ Apple Pay not offered here. Open this site directly in the Safari app (not from a link inside another app).';
-          s.style.color='#b00';
-        }
-      });
+      var s = document.getElementById('apStatus');
+      var inApp = /Instagram|FBAN|FBAV|Line|TikTok|Snapchat|Telegram|FB_IAB/.test(navigator.userAgent);
+      if(s){ s.textContent = inApp ? 'tip: tap ••• → Open in Safari for Apple Pay' : ''; s.style.color = '#777'; }
     }catch(e){}
     ec.on('confirm', doConfirm);
     ec.on('ready', ev => {
