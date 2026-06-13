@@ -11,6 +11,7 @@ export default async function handler(req, res) {
     params.append('success_url', origin + '/?paid=1');
     params.append('cancel_url', origin + '/');
     params.append('submit_type', 'pay');
+    params.append('payment_intent_data[metadata][potato]', '1');
     params.append('line_items[0][quantity]', String(qty));
     params.append('line_items[0][price_data][currency]', 'usd');
     params.append('line_items[0][price_data][unit_amount]', '100');
