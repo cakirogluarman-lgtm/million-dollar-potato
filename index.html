@@ -699,7 +699,7 @@ async function setupPayment(){
     intentQty = payAmount;
     ecEl.innerHTML = ''; peEl.innerHTML = '';
     elements = stripe.elements({clientSecret: d.clientSecret, appearance: {variables: {colorPrimary:'#111111', colorBackground:'#ffffff', colorText:'#111111', borderRadius:'4px', fontFamily:'"Courier New", Courier, monospace'}}});
-    const ec = elements.create('expressCheckout', {paymentMethods:{amazonPay:'never'}, buttonHeight:48});
+    const ec = elements.create('expressCheckout', {paymentMethods:{amazonPay:'never', link:'never'}, buttonHeight:48});
     ec.mount('#ecEl');
     ec.on('confirm', doConfirm);
     ec.on('ready', ev => { if(!ev.availablePaymentMethods){ payDivider.style.display='none'; showCardForm(); } });
