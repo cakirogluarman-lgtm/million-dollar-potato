@@ -704,8 +704,10 @@ async function setupPayment(){
     ec.mount('#ecEl');
     ec.on('confirm', doConfirm);
     ec.on('ready', ev => {
-      var m = ev.availablePaymentMethods || {};
-      if(!m.applePay && !m.googlePay && !m.link){ payDivider.style.display='none'; showCardForm(); }
+      var m = ev.availablePaymentMethods;
+      var s = document.getElementById('apStatus');
+      if(s){ s.textContent = 'STRIPE reports → ' + (m ? JSON.stringify(m) : 'NO wallets available'); s.style.color = (m && m.applePay) ? '#1a8a3a' : '#b00'; }
+      if(!m || (!m.applePay && !m.googlePay && !m.link)){ payDivider.style.display='none'; showCardForm(); }
     });
     const pe = elements.create('payment', {layout: 'tabs'});
     pe.mount('#peEl');
