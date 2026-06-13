@@ -480,6 +480,7 @@
       <div class="wheel-window"></div>
       <div class="wheel-fades"></div>
     </div>
+    <div id="apStatus" style="font-size:11px;text-align:center;margin:0 0 6px;color:#555"></div>
     <div id="ecEl"></div>
     <div class="pay-divider" id="payDivider"><span>or</span></div>
     <button class="paybtn ghost" id="cardToggle"><svg width="20" height="15" viewBox="0 0 24 18" style="vertical-align:-2px;margin-right:8px" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="22" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="1" y="4.5" width="22" height="3.5" fill="currentColor"/><rect x="4" y="11.5" width="7" height="2" fill="currentColor"/></svg>pay with card &rarr;</button>
@@ -765,6 +766,18 @@ function openCheckout(withWheel){
   payDivider.style.display = '';
   payBtn.disabled = false; setPayLabel();
   overlay.classList.add('open');
+  try{
+    var s = document.getElementById('apStatus');
+    var hasAPS = (typeof window.ApplePaySession !== 'undefined');
+    var canPay = hasAPS && ApplePaySession.canMakePayments ? ApplePaySession.canMakePayments() : false;
+    var ua = navigator.userAgent;
+    var inApp = /Instagram|FBAN|FBAV|Line|TikTok|Snapchat|Telegram|FB_IAB/.test(ua);
+    var isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+    if(canPay && !inApp){ s.textContent = '✓ Apple Pay is available — it should appear above'; s.style.color='#1a8a3a'; }
+    else if(inApp){ s.textContent = '⚠ open in Safari (in-app browsers block Apple Pay)'; s.style.color='#b00'; }
+    else if(!hasAPS || !isSafari){ s.textContent = '⚠ Apple Pay needs Safari on iPhone/Mac'; s.style.color='#b00'; }
+    else { s.textContent = '⚠ Apple Pay off: Settings → Safari → check Apple Pay, + add a card to Wallet'; s.style.color='#b00'; }
+  }catch(e){}
   setupPayment();
 }
 function closeCheckout(){ overlay.classList.remove('open'); }
