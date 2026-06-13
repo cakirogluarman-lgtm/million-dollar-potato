@@ -357,7 +357,7 @@
 <body>
 
 <div class="topbar">
-  <span>est. 2026 — day <span id="day">1</span></span>
+  <span>est. 2026</span>
   <span class="live"><span class="dot"></span>LIVE</span>
 </div>
 
@@ -516,7 +516,6 @@ const certNum = document.getElementById('certNum');
 const pins = document.getElementById('pins');
 const mapLatest = document.getElementById('mapLatest');
 const SVGNS = 'http://www.w3.org/2000/svg';
-document.getElementById('day').textContent = Math.max(1, Math.ceil((Date.now()-LAUNCH)/864e5));
 
 function fmt(n){return n.toLocaleString('en-US')}
 
