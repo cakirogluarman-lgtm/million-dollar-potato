@@ -5,15 +5,14 @@ export default async function handler(req, res) {
   try {
     const raw = (req.body && req.body.qty) || 1;
     const qty = Math.max(1, Math.min(100000, parseInt(raw, 10) || 1));
-    const coverFee = !!(req.body && req.body.fee);
-    const feeCents = coverFee ? Math.round(qty * 100 * 0.029 + 30) : 0;
 
     const params = new URLSearchParams();
-    params.append('amount', String(qty * 100 + feeCents));
+    params.append('amount', String(qty * 100));
     params.append('currency', 'usd');
-    params.append('automatic_payment_methods[enabled]', 'true');
+    params.append('payment_method_types[]', 'card');
+    params.append('payment_method_types[]', 'link');
     params.append('metadata[potato]', '1');
-    params.append('description', 'The Million Dollar Potato - novelty certificate x' + qty + (coverFee ? ' + fees' : ''));
+    params.append('description', 'The Million Dollar Potato - novelty certificate x' + qty);
 
     const r = await fetch('https://api.stripe.com/v1/payment_intents', {
       method: 'POST',

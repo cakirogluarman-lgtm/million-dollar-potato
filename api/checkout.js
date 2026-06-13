@@ -5,8 +5,6 @@ export default async function handler(req, res) {
   try {
     const raw = (req.body && req.body.qty) || 1;
     const qty = Math.max(1, Math.min(100000, parseInt(raw, 10) || 1));
-    const coverFee = !!(req.body && req.body.fee);
-    const feeCents = coverFee ? Math.round(qty * 100 * 0.029 + 30) : 0;
     const origin = req.headers.origin || 'https://million-dollar-potato.vercel.app';
 
     const params = new URLSearchParams();
@@ -20,12 +18,6 @@ export default async function handler(req, res) {
     params.append('line_items[0][price_data][unit_amount]', '100');
     params.append('line_items[0][price_data][product_data][name]', 'The Million Dollar Potato - novelty certificate');
     params.append('line_items[0][price_data][product_data][description]', 'A numbered novelty digital certificate. Not a security. It is a potato.');
-    if (feeCents > 0) {
-      params.append('line_items[1][quantity]', '1');
-      params.append('line_items[1][price_data][currency]', 'usd');
-      params.append('line_items[1][price_data][unit_amount]', String(feeCents));
-      params.append('line_items[1][price_data][product_data][name]', 'Cover the card fees (so the potato keeps the whole dollar)');
-    }
 
     const r = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
