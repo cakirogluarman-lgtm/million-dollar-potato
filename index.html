@@ -228,10 +228,12 @@
   /* checkout modal */
   .overlay{
     position:fixed;inset:0;background:rgba(17,17,17,.55);
-    display:none;align-items:center;justify-content:center;z-index:50;padding:18px;
+    display:none;align-items:flex-start;justify-content:center;z-index:50;padding:18px;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
   }
   .overlay.open{display:flex}
   .paybox{
+    margin:auto;
     background:#f4f1e8;border:3px solid #111;box-shadow:10px 10px 0 #111;
     max-width:380px;width:100%;padding:26px 24px;position:relative;
     transform:rotate(-.5deg);
@@ -690,7 +692,7 @@ async function setupPayment(){
     intentQty = payAmount;
     ecEl.innerHTML = ''; peEl.innerHTML = '';
     elements = stripe.elements({clientSecret: d.clientSecret, appearance: {variables: {colorPrimary:'#111111', colorBackground:'#ffffff', colorText:'#111111', borderRadius:'4px', fontFamily:'"Courier New", Courier, monospace'}}});
-    const ec = elements.create('expressCheckout');
+    const ec = elements.create('expressCheckout', {paymentMethods:{amazonPay:'never'}, buttonHeight:48});
     ec.mount('#ecEl');
     ec.on('confirm', doConfirm);
     const pe = elements.create('payment', {layout: 'tabs'});

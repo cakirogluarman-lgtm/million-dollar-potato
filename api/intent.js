@@ -9,7 +9,8 @@ export default async function handler(req, res) {
     const params = new URLSearchParams();
     params.append('amount', String(qty * 100));
     params.append('currency', 'usd');
-    params.append('automatic_payment_methods[enabled]', 'true');
+    params.append('payment_method_types[]', 'card');
+    params.append('payment_method_types[]', 'link');
     params.append('metadata[potato]', '1');
     params.append('description', 'The Million Dollar Potato - novelty certificate x' + qty);
 
