@@ -307,6 +307,7 @@
     padding:13px;cursor:pointer;margin-top:12px;
   }
   .paybtn:active{opacity:.85}
+  .paybtn.ghost{background:#f4f1e8;color:#111}
   .paybtn:disabled{opacity:.55;cursor:wait}
 
   /* ---------- mobile ---------- */
@@ -480,9 +481,10 @@
       <div class="wheel-fades"></div>
     </div>
     <div id="ecEl"></div>
-    <div class="pay-divider" id="payDivider"><span>or pay with card</span></div>
-    <div id="peEl"></div>
-    <button class="paybtn" id="payBtn">pay $1</button>
+    <div class="pay-divider" id="payDivider"><span>or</span></div>
+    <button class="paybtn ghost" id="cardToggle">pay with card &rarr;</button>
+    <div id="peEl" hidden></div>
+    <button class="paybtn" id="payBtn" hidden>pay $1</button>
     <button class="orcard" id="backupPay">backup: pay on a stripe page &rarr;</button>
     <div class="paid-stamp" id="paidStamp">RECEIVED ✓</div>
   </div>
@@ -639,6 +641,9 @@ const wheel = document.getElementById('wheel');
 const ecEl = document.getElementById('ecEl');
 const peEl = document.getElementById('peEl');
 const payDivider = document.getElementById('payDivider');
+const cardToggle = document.getElementById('cardToggle');
+function showCardForm(){ cardToggle.hidden = true; peEl.hidden = false; payBtn.hidden = false; }
+
 
 const STRIPE_PK = 'pk_live_51TcGJ4KqVrmdsHCGXrINHck04QMMPiX5u9vwAX4ubr3YruHP06sCkf71Bix4oZtB5yOlWzUL23YsqrwnHXAU1YTP00EaGniPZf';
 let stripe = null, elements = null, intentQty = 0, settingUp = false, intentT = null;
@@ -695,12 +700,14 @@ async function setupPayment(){
     const ec = elements.create('expressCheckout', {paymentMethods:{amazonPay:'never'}, buttonHeight:48});
     ec.mount('#ecEl');
     ec.on('confirm', doConfirm);
+    ec.on('ready', ev => { if(!ev.availablePaymentMethods){ payDivider.style.display='none'; showCardForm(); } });
     const pe = elements.create('payment', {layout: 'tabs'});
     pe.mount('#peEl');
     payBtn.disabled = false; setPayLabel();
   }catch(err){
     elements = null;
-    payBtn.disabled = false;
+    cardToggle.hidden = true; payDivider.style.display = 'none';
+    payBtn.hidden = false; payBtn.disabled = false;
     payBtn.textContent = 'pay $' + fmt(payAmount) + ' (backup)';
   }
   settingUp = false;
@@ -749,6 +756,8 @@ function openCheckout(withWheel){
   payNote.textContent = noteFor(payAmount);
   if(withWheel) wheel.querySelectorAll('.wopt').forEach((el,i)=>el.classList.toggle('sel', i===0));
   paidStamp.classList.remove('show');
+  cardToggle.hidden = false; peEl.hidden = true; payBtn.hidden = true;
+  payDivider.style.display = '';
   payBtn.disabled = false; setPayLabel();
   overlay.classList.add('open');
   setupPayment();
@@ -766,6 +775,7 @@ payBtn.addEventListener('click', ()=>{
   backupCheckout();
 });
 document.getElementById('backupPay').addEventListener('click', backupCheckout);
+cardToggle.addEventListener('click', showCardForm);
 
 /* returning from a successful Stripe payment */
 if(new URLSearchParams(location.search).get('paid') === '1'){
@@ -773,7 +783,7 @@ if(new URLSearchParams(location.search).get('paid') === '1'){
   overlay.classList.add('open');
   wheelwrap.hidden = true;
   payBtn.style.display = 'none';
-  ecEl.style.display = 'none'; peEl.style.display = 'none'; payDivider.style.display = 'none';
+  ecEl.style.display = 'none'; peEl.style.display = 'none'; payDivider.style.display = 'none'; cardToggle.hidden = true;
   document.getElementById('backupPay').style.display = 'none';
   payAmtEl.textContent = 'you’re in.';
   payNote.textContent = 'payment received. the ticker felt it. welcome to history.';
