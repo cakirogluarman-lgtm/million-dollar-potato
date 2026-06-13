@@ -14,8 +14,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ domains: out });
     }
     if (req.method === 'POST') {
+      // register the domain this request is being served from (e.g. themillionpotato.com),
+      // or an explicit ?domain=... override
+      const domain = (req.query && req.query.domain) || req.headers.host || 'million-dollar-potato.vercel.app';
       const p = new URLSearchParams();
-      p.append('domain_name', 'million-dollar-potato.vercel.app');
+      p.append('domain_name', domain);
       const r = await fetch('https://api.stripe.com/v1/payment_method_domains', {
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/x-www-form-urlencoded' }, auth),
