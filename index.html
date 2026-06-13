@@ -489,6 +489,7 @@
     <div id="peEl" hidden></div>
     <button class="paybtn" id="payBtn" hidden>pay $1</button>
     <button class="orcard" id="backupPay">backup: pay on a stripe page &rarr;</button>
+    <div id="payDbg" style="font-size:10px;color:#999;margin-top:8px;word-break:break-all"></div>
     <div class="paid-stamp" id="paidStamp">RECEIVED ✓</div>
   </div>
 </div>
@@ -712,7 +713,12 @@ async function setupPayment(){
     const ec = elements.create('expressCheckout', {paymentMethods:{amazonPay:'never', applePay:'always', googlePay:'always'}, layout:{maxColumns:1, maxRows:3}, buttonHeight:48});
     ec.mount('#ecEl');
     ec.on('confirm', doConfirm);
-    ec.on('ready', ev => { if(!ev.availablePaymentMethods){ payDivider.style.display='none'; showCardForm(); } });
+    ec.on('ready', ev => {
+      if(!ev.availablePaymentMethods){ payDivider.style.display='none'; showCardForm(); }
+      if(new URLSearchParams(location.search).has('debug')){
+        document.getElementById('payDbg').textContent = 'stripe says: ' + JSON.stringify(ev.availablePaymentMethods) + ' | ua: ' + (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('CriOS') ? 'safari-ish' : 'NOT safari') + ' | applePaySession: ' + (typeof window.ApplePaySession !== 'undefined' ? 'yes, canMakePayments=' + (window.ApplePaySession && ApplePaySession.canMakePayments()) : 'NO');
+      }
+    });
     const pe = elements.create('payment', {layout: 'tabs'});
     pe.mount('#peEl');
     payBtn.disabled = false; setPayLabel();
