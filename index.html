@@ -745,10 +745,6 @@ async function doConfirm(){
     setTimeout(setPayLabel, 3000);
     return;
   }
-  showPaid();
-}
-
-function showPaid(){
   tickSound();
   var piId = result.paymentIntent && result.paymentIntent.id;
   askForName(piId);
