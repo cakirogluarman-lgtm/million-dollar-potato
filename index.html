@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>the million dollar potato</title>
 <meta name="description" content="1 million people. $1 each. one potato. that's the whole website.">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:title" content="the million dollar potato">
+<meta property="og:description" content="one potato. one million people. one dollar each. be one in a million.">
+<meta property="og:image" content="https://million-dollar-potato.vercel.app/og.png">
+<meta property="og:url" content="https://million-dollar-potato.vercel.app">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="the million dollar potato">
+<meta name="twitter:description" content="one potato. one million people. one dollar each.">
+<meta name="twitter:image" content="https://million-dollar-potato.vercel.app/og.png">
 <style>
   /* lo-fi zine / brutalist — looks like a person made it at 2am, on purpose */
   *{margin:0;padding:0;box-sizing:border-box}
@@ -282,6 +293,20 @@
   }
   @keyframes rise{to{transform:translateY(-90px);opacity:0}}
 
+
+  /* embedded payments */
+  #ecEl{margin:4px 0 2px;min-height:0}
+  #peEl{margin:8px 0 2px}
+  .pay-divider{display:flex;align-items:center;gap:10px;margin:14px 0 6px;color:#777;font-size:11px;letter-spacing:2px}
+  .pay-divider::before,.pay-divider::after{content:"";flex:1;border-top:1px dashed #999}
+  .paybtn{
+    width:100%;background:#111;color:#f4f1e8;border:2px solid #111;
+    font-family:inherit;font-size:16px;font-weight:bold;
+    padding:13px;cursor:pointer;margin-top:12px;
+  }
+  .paybtn:active{opacity:.85}
+  .paybtn:disabled{opacity:.55;cursor:wait}
+
   /* ---------- mobile ---------- */
   @media(max-width:640px){
     .topbar{font-size:11px;padding:8px 14px}
@@ -322,6 +347,7 @@
     .wheel{height:168px}
   }
 </style>
+<script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
 
@@ -451,8 +477,11 @@
       <div class="wheel-window"></div>
       <div class="wheel-fades"></div>
     </div>
-    <button class="applepay" id="payBtn"><span style="font-size:21px"></span> Pay</button>
-    <button class="orcard">or pay with card / google pay</button>
+    <div id="ecEl"></div>
+    <div class="pay-divider" id="payDivider"><span>or pay with card</span></div>
+    <div id="peEl"></div>
+    <button class="paybtn" id="payBtn">pay $1</button>
+    <button class="orcard" id="backupPay">backup: pay on a stripe page &rarr;</button>
     <div class="paid-stamp" id="paidStamp">RECEIVED ✓</div>
   </div>
 </div>
@@ -597,7 +626,7 @@ async function poll(){
   setTimeout(poll, 8000);
 }
 
-/* ---------- checkout ---------- */
+/* ---------- checkout (embedded Stripe Elements) ---------- */
 const overlay = document.getElementById('overlay');
 const payAmtEl = document.getElementById('payAmt');
 const payNote = document.getElementById('payNote');
@@ -605,6 +634,13 @@ const payBtn = document.getElementById('payBtn');
 const paidStamp = document.getElementById('paidStamp');
 const wheelwrap = document.getElementById('wheelwrap');
 const wheel = document.getElementById('wheel');
+const ecEl = document.getElementById('ecEl');
+const peEl = document.getElementById('peEl');
+const payDivider = document.getElementById('payDivider');
+
+const STRIPE_PK = 'pk_live_51TcGJ4KqVrmdsHCGXrINHck04QMMPiX5u9vwAX4ubr3YruHP06sCkf71Bix4oZtB5yOlWzUL23YsqrwnHXAU1YTP00EaGniPZf';
+let stripe = null, elements = null, intentQty = 0, settingUp = false, intentT = null;
+try{ if(!DEMO && window.Stripe) stripe = Stripe(STRIPE_PK); }catch(e){}
 
 const AMOUNTS = [1,2,3,5,8,10,20,25,50,75,100,150,200,250,500,750,1000,2000,2500,5000,7500,10000,15000,25000,50000,75000,100000];
 let payAmount = 1;
@@ -619,6 +655,8 @@ function noteFor(a){
   return NOTES[1];
 }
 
+function setPayLabel(){ payBtn.textContent = 'pay $' + fmt(payAmount); }
+
 wheel.innerHTML = '<div class="pad"></div>' +
   AMOUNTS.map(a=>`<div class="wopt" data-a="${a}">$${a.toLocaleString('en-US')}</div>`).join('') +
   '<div class="pad"></div>';
@@ -632,19 +670,86 @@ wheel.addEventListener('scroll', ()=>{
 });
 function setWheelSel(idx){
   payAmount = AMOUNTS[idx];
-  payAmtEl.textContent = '$' + payAmount.toLocaleString('en-US');
+  payAmtEl.textContent = '$' + fmt(payAmount);
   payNote.textContent = noteFor(payAmount);
   wheel.querySelectorAll('.wopt').forEach((el,i)=>el.classList.toggle('sel', i===idx));
+  setPayLabel();
+  clearTimeout(intentT);
+  intentT = setTimeout(setupPayment, 700);
+}
+
+async function setupPayment(){
+  if(DEMO || !stripe || settingUp) return;
+  if(intentQty === payAmount && elements) return;
+  settingUp = true;
+  payBtn.disabled = true; payBtn.textContent = 'loading…';
+  try{
+    const r = await fetch('/api/intent', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({qty: payAmount})});
+    const d = await r.json();
+    if(!d.clientSecret) throw new Error(d.error || 'no client secret');
+    intentQty = payAmount;
+    ecEl.innerHTML = ''; peEl.innerHTML = '';
+    elements = stripe.elements({clientSecret: d.clientSecret, appearance: {variables: {colorPrimary:'#111111', colorBackground:'#ffffff', colorText:'#111111', borderRadius:'4px', fontFamily:'"Courier New", Courier, monospace'}}});
+    const ec = elements.create('expressCheckout');
+    ec.mount('#ecEl');
+    ec.on('confirm', doConfirm);
+    const pe = elements.create('payment', {layout: 'tabs'});
+    pe.mount('#peEl');
+    payBtn.disabled = false; setPayLabel();
+  }catch(err){
+    elements = null;
+    payBtn.disabled = false;
+    payBtn.textContent = 'pay $' + fmt(payAmount) + ' (backup)';
+  }
+  settingUp = false;
+}
+
+async function doConfirm(){
+  if(!stripe || !elements) return;
+  payBtn.disabled = true; payBtn.textContent = 'paying…';
+  const result = await stripe.confirmPayment({
+    elements,
+    confirmParams: {return_url: location.origin + '/?paid=1'},
+    redirect: 'if_required'
+  });
+  if(result.error){
+    payBtn.disabled = false;
+    payBtn.textContent = result.error.message || 'try again';
+    setTimeout(setPayLabel, 3000);
+    return;
+  }
+  showPaid();
+}
+
+function showPaid(){
+  paidStamp.classList.add('show'); tickSound();
+  setTimeout(()=>{ closeCheckout(); setPayLabel(); }, 1700);
+}
+
+async function backupCheckout(){
+  payBtn.disabled = true; payBtn.textContent = 'one sec…';
+  try{
+    const r = await fetch('/api/checkout', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({qty: payAmount})});
+    const d = await r.json();
+    if(d && d.url){ window.location.href = d.url; return; }
+    throw new Error('no url');
+  }catch(e){
+    payBtn.disabled = false; payBtn.textContent = 'hmm. try again →';
+    setTimeout(setPayLabel, 2500);
+  }
 }
 
 function openCheckout(withWheel){
   wheelwrap.hidden = !withWheel;
-  if(withWheel){ wheel.scrollTop = 0; lastIdx = 0; setWheelSel(0); }
-  else { payAmount = 1; payAmtEl.textContent = '$1'; payNote.textContent = noteFor(1); }
+  if(withWheel){ wheel.scrollTop = 0; lastIdx = 0; payAmount = AMOUNTS[0]; }
+  else { payAmount = 1; }
+  payAmtEl.textContent = '$' + fmt(payAmount);
+  payNote.textContent = noteFor(payAmount);
+  if(withWheel) wheel.querySelectorAll('.wopt').forEach((el,i)=>el.classList.toggle('sel', i===0));
   paidStamp.classList.remove('show');
-  payBtn.disabled = false;
-  payBtn.innerHTML = '<span style="font-size:21px"></span> Pay';
+  payBtn.disabled = false; setPayLabel();
   overlay.classList.add('open');
+  setupPayment();
 }
 function closeCheckout(){ overlay.classList.remove('open'); }
 
@@ -653,28 +758,12 @@ document.getElementById('buyMore').addEventListener('click', ()=>openCheckout(tr
 document.getElementById('closePay').addEventListener('click', closeCheckout);
 overlay.addEventListener('click', e=>{ if(e.target===overlay) closeCheckout(); });
 
-payBtn.addEventListener('click', async ()=>{
-  payBtn.disabled = true;
-  payBtn.textContent = 'one sec…';
-  if(DEMO){
-    setTimeout(()=>{ paidStamp.classList.add('show'); tickSound();
-      setTimeout(closeCheckout, 900); }, 600);
-    return;
-  }
-  try{
-    const r = await fetch('/api/checkout', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({qty: payAmount})
-    });
-    const d = await r.json();
-    if(d && d.url){ window.location.href = d.url; return; }
-    throw new Error((d && d.error) || 'no checkout url');
-  }catch(err){
-    payBtn.textContent = 'hmm. try again →';
-    payBtn.disabled = false;
-  }
+payBtn.addEventListener('click', ()=>{
+  if(DEMO){ paidStamp.classList.add('show'); tickSound(); setTimeout(closeCheckout, 900); return; }
+  if(stripe && elements){ doConfirm(); return; }
+  backupCheckout();
 });
+document.getElementById('backupPay').addEventListener('click', backupCheckout);
 
 /* returning from a successful Stripe payment */
 if(new URLSearchParams(location.search).get('paid') === '1'){
@@ -682,7 +771,8 @@ if(new URLSearchParams(location.search).get('paid') === '1'){
   overlay.classList.add('open');
   wheelwrap.hidden = true;
   payBtn.style.display = 'none';
-  document.querySelector('.orcard').style.display = 'none';
+  ecEl.style.display = 'none'; peEl.style.display = 'none'; payDivider.style.display = 'none';
+  document.getElementById('backupPay').style.display = 'none';
   payAmtEl.textContent = 'you’re in.';
   payNote.textContent = 'payment received. the ticker felt it. welcome to history.';
   paidStamp.classList.add('show');
