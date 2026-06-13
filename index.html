@@ -308,6 +308,8 @@
   }
   .paybtn:active{opacity:.85}
   .paybtn.ghost{background:#f4f1e8;color:#111}
+  .feecover{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;margin:2px 0 12px;cursor:pointer;text-align:left;line-height:1.4}
+  .feecover input{accent-color:#111;margin-top:2px;width:15px;height:15px;flex-shrink:0}
   .paybtn:disabled{opacity:.55;cursor:wait}
 
   /* ---------- mobile ---------- */
@@ -480,6 +482,7 @@
       <div class="wheel-window"></div>
       <div class="wheel-fades"></div>
     </div>
+    <label class="feecover" id="feeRow"><input type="checkbox" id="feeChk"><span>add <b id="feeAmt">$0.33</b> to cover the card fees so the potato keeps the whole thing</span></label>
     <div id="ecEl"></div>
     <div class="pay-divider" id="payDivider"><span>or</span></div>
     <button class="paybtn ghost" id="cardToggle"><svg width="20" height="15" viewBox="0 0 24 18" style="vertical-align:-2px;margin-right:8px" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="22" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="1" y="4.5" width="22" height="3.5" fill="currentColor"/><rect x="4" y="11.5" width="7" height="2" fill="currentColor"/></svg>pay with card &rarr;</button>
@@ -645,6 +648,12 @@ const ecEl = document.getElementById('ecEl');
 const peEl = document.getElementById('peEl');
 const payDivider = document.getElementById('payDivider');
 const cardToggle = document.getElementById('cardToggle');
+const feeChk = document.getElementById('feeChk');
+const feeAmt = document.getElementById('feeAmt');
+function feeCents(){ return Math.round(payAmount*100*0.029 + 30); }
+function totalCents(){ return payAmount*100 + (feeChk.checked ? feeCents() : 0); }
+function fmtCents(c){ return c % 100 === 0 ? fmt(c/100) : (c/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function updateFeeRow(){ feeAmt.textContent = '$' + (feeCents()/100).toFixed(2); }
 function showCardForm(){ cardToggle.hidden = true; peEl.hidden = false; payBtn.hidden = false; }
 
 
@@ -665,7 +674,7 @@ function noteFor(a){
   return NOTES[1];
 }
 
-function setPayLabel(){ payBtn.textContent = 'pay $' + fmt(payAmount); }
+function setPayLabel(){ payBtn.textContent = 'pay $' + fmtCents(totalCents()); }
 
 wheel.innerHTML = '<div class="pad"></div>' +
   AMOUNTS.map(a=>`<div class="wopt" data-a="${a}">$${a.toLocaleString('en-US')}</div>`).join('') +
@@ -683,21 +692,22 @@ function setWheelSel(idx){
   payAmtEl.textContent = '$' + fmt(payAmount);
   payNote.textContent = noteFor(payAmount);
   wheel.querySelectorAll('.wopt').forEach((el,i)=>el.classList.toggle('sel', i===idx));
-  setPayLabel();
+  updateFeeRow(); setPayLabel();
   clearTimeout(intentT);
   intentT = setTimeout(setupPayment, 700);
 }
 
 async function setupPayment(){
   if(DEMO || !stripe || settingUp) return;
-  if(intentQty === payAmount && elements) return;
+  const key = payAmount + '|' + feeChk.checked;
+  if(intentQty === key && elements) return;
   settingUp = true;
   payBtn.disabled = true; payBtn.textContent = 'loading…';
   try{
-    const r = await fetch('/api/intent', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({qty: payAmount})});
+    const r = await fetch('/api/intent', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({qty: payAmount, fee: feeChk.checked})});
     const d = await r.json();
     if(!d.clientSecret) throw new Error(d.error || 'no client secret');
-    intentQty = payAmount;
+    intentQty = key;
     ecEl.innerHTML = ''; peEl.innerHTML = '';
     elements = stripe.elements({clientSecret: d.clientSecret, appearance: {variables: {colorPrimary:'#111111', colorBackground:'#ffffff', colorText:'#111111', borderRadius:'4px', fontFamily:'"Courier New", Courier, monospace'}}});
     const ec = elements.create('expressCheckout', {paymentMethods:{amazonPay:'never'}, buttonHeight:48});
@@ -759,6 +769,7 @@ function openCheckout(withWheel){
   payNote.textContent = noteFor(payAmount);
   if(withWheel) wheel.querySelectorAll('.wopt').forEach((el,i)=>el.classList.toggle('sel', i===0));
   paidStamp.classList.remove('show');
+  feeChk.checked = false; updateFeeRow();
   cardToggle.hidden = false; peEl.hidden = true; payBtn.hidden = true;
   payDivider.style.display = '';
   payBtn.disabled = false; setPayLabel();
@@ -779,6 +790,7 @@ payBtn.addEventListener('click', ()=>{
 });
 document.getElementById('backupPay').addEventListener('click', backupCheckout);
 cardToggle.addEventListener('click', showCardForm);
+feeChk.addEventListener('change', ()=>{ setPayLabel(); clearTimeout(intentT); intentT = setTimeout(setupPayment, 400); });
 
 /* returning from a successful Stripe payment */
 if(new URLSearchParams(location.search).get('paid') === '1'){
@@ -786,7 +798,7 @@ if(new URLSearchParams(location.search).get('paid') === '1'){
   overlay.classList.add('open');
   wheelwrap.hidden = true;
   payBtn.style.display = 'none';
-  ecEl.style.display = 'none'; peEl.style.display = 'none'; payDivider.style.display = 'none'; cardToggle.hidden = true;
+  ecEl.style.display = 'none'; peEl.style.display = 'none'; payDivider.style.display = 'none'; cardToggle.hidden = true; document.getElementById('feeRow').style.display = 'none';
   document.getElementById('backupPay').style.display = 'none';
   payAmtEl.textContent = 'you’re in.';
   payNote.textContent = 'payment received. the ticker felt it. welcome to history.';
