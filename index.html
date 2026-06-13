@@ -480,13 +480,8 @@
       <div class="wheel-window"></div>
       <div class="wheel-fades"></div>
     </div>
-    <div id="apStatus" style="font-size:11px;text-align:center;margin:0 0 6px;color:#555"></div>
-    <div id="ecEl"></div>
-    <div class="pay-divider" id="payDivider"><span>or</span></div>
-    <button class="paybtn ghost" id="cardToggle"><svg width="20" height="15" viewBox="0 0 24 18" style="vertical-align:-2px;margin-right:8px" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="22" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="1" y="4.5" width="22" height="3.5" fill="currentColor"/><rect x="4" y="11.5" width="7" height="2" fill="currentColor"/></svg>pay with card &rarr;</button>
-    <div id="peEl" hidden></div>
-    <button class="paybtn" id="payBtn" hidden>pay $1</button>
-    <button class="orcard" id="backupPay">backup: pay on a stripe page &rarr;</button>
+    <div id="peEl"></div>
+    <button class="paybtn" id="payBtn">pay $1</button>
     <div class="paid-stamp" id="paidStamp">RECEIVED ✓</div>
   </div>
 </div>
@@ -633,7 +628,7 @@ async function poll(){
   setTimeout(poll, 8000);
 }
 
-/* ---------- checkout (embedded Stripe Elements) ---------- */
+/* ---------- checkout: single Payment Element (Apple Pay/Google Pay show at top automatically) ---------- */
 const overlay = document.getElementById('overlay');
 const payAmtEl = document.getElementById('payAmt');
 const payNote = document.getElementById('payNote');
@@ -641,15 +636,10 @@ const payBtn = document.getElementById('payBtn');
 const paidStamp = document.getElementById('paidStamp');
 const wheelwrap = document.getElementById('wheelwrap');
 const wheel = document.getElementById('wheel');
-const ecEl = document.getElementById('ecEl');
 const peEl = document.getElementById('peEl');
-const payDivider = document.getElementById('payDivider');
-const cardToggle = document.getElementById('cardToggle');
-function showCardForm(){ cardToggle.hidden = true; peEl.hidden = false; payBtn.hidden = false; }
-
 
 const STRIPE_PK = 'pk_live_51TcGJ4KqVrmdsHCGXrINHck04QMMPiX5u9vwAX4ubr3YruHP06sCkf71Bix4oZtB5yOlWzUL23YsqrwnHXAU1YTP00EaGniPZf';
-let stripe = null, elements = null, intentQty = 0, settingUp = false, intentT = null;
+let stripe = null, elements = null, paymentEl = null, intentQty = 0, settingUp = false, intentT = null;
 try{ if(!DEMO && window.Stripe) stripe = Stripe(STRIPE_PK); }catch(e){}
 
 const AMOUNTS = [1,2,3,5,8,10,20,25,50,75,100,150,200,250,500,750,1000,2000,2500,5000,7500,10000,15000,25000,50000,75000,100000];
@@ -664,8 +654,7 @@ function noteFor(a){
   if(a>=10) return NOTES[10];
   return NOTES[1];
 }
-
-function setPayLabel(){ payBtn.textContent = 'pay $' + fmt(payAmount); }
+function setPayLabel(){ payBtn.textContent = 'pay $' + fmt(payAmount) + ' →'; }
 
 wheel.innerHTML = '<div class="pad"></div>' +
   AMOUNTS.map(a=>`<div class="wopt" data-a="${a}">$${a.toLocaleString('en-US')}</div>`).join('') +
@@ -685,7 +674,7 @@ function setWheelSel(idx){
   wheel.querySelectorAll('.wopt').forEach((el,i)=>el.classList.toggle('sel', i===idx));
   setPayLabel();
   clearTimeout(intentT);
-  intentT = setTimeout(setupPayment, 700);
+  intentT = setTimeout(setupPayment, 600);
 }
 
 async function setupPayment(){
@@ -698,32 +687,25 @@ async function setupPayment(){
     const d = await r.json();
     if(!d.clientSecret) throw new Error(d.error || 'no client secret');
     intentQty = payAmount;
-    ecEl.innerHTML = ''; peEl.innerHTML = '';
-    elements = stripe.elements({clientSecret: d.clientSecret, appearance: {variables: {colorPrimary:'#111111', colorBackground:'#ffffff', colorText:'#111111', borderRadius:'4px', fontFamily:'"Courier New", Courier, monospace'}}});
-    const ec = elements.create('expressCheckout', {paymentMethods:{amazonPay:'never'}, buttonHeight:48});
-    ec.mount('#ecEl');
-    ec.on('confirm', doConfirm);
-    ec.on('ready', ev => {
-      var m = ev.availablePaymentMethods;
-      var s = document.getElementById('apStatus');
-      if(s){ s.textContent = 'STRIPE reports → ' + (m ? JSON.stringify(m) : 'NO wallets available'); s.style.color = (m && m.applePay) ? '#1a8a3a' : '#b00'; }
-      if(!m || (!m.applePay && !m.googlePay && !m.link)){ payDivider.style.display='none'; showCardForm(); }
+    peEl.innerHTML = '';
+    elements = stripe.elements({clientSecret: d.clientSecret, appearance: {theme:'stripe', variables: {colorPrimary:'#111111', borderRadius:'6px', fontFamily:'"Courier New", Courier, monospace'}}});
+    // Payment Element shows Apple Pay / Google Pay buttons at the top automatically when available,
+    // with card + other methods below.
+    paymentEl = elements.create('payment', {
+      layout: {type:'accordion', defaultCollapsed:false, radios:false, spacedAccordionItems:true},
+      wallets: {applePay:'auto', googlePay:'auto'}
     });
-    const pe = elements.create('payment', {layout: 'tabs'});
-    pe.mount('#peEl');
+    paymentEl.mount('#peEl');
     payBtn.disabled = false; setPayLabel();
   }catch(err){
-    elements = null;
-    cardToggle.hidden = true; payDivider.style.display = 'none';
-    payBtn.hidden = false; payBtn.disabled = false;
-    payBtn.textContent = 'pay $' + fmt(payAmount) + ' (backup)';
+    payBtn.disabled = false; payBtn.textContent = 'tap to retry';
   }
   settingUp = false;
 }
 
 async function doConfirm(){
-  if(!stripe || !elements) return;
-  payBtn.disabled = true; payBtn.textContent = 'paying…';
+  if(!stripe || !elements) { setupPayment(); return; }
+  payBtn.disabled = true; payBtn.textContent = 'processing…';
   const result = await stripe.confirmPayment({
     elements,
     confirmParams: {return_url: location.origin + '/?paid=1'},
@@ -732,54 +714,22 @@ async function doConfirm(){
   if(result.error){
     payBtn.disabled = false;
     payBtn.textContent = result.error.message || 'try again';
-    setTimeout(setPayLabel, 3000);
+    setTimeout(setPayLabel, 3500);
     return;
   }
-  showPaid();
-}
-
-function showPaid(){
   paidStamp.classList.add('show'); tickSound();
   setTimeout(()=>{ closeCheckout(); setPayLabel(); }, 1700);
 }
 
-async function backupCheckout(){
-  payBtn.disabled = true; payBtn.textContent = 'one sec…';
-  try{
-    const r = await fetch('/api/checkout', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({qty: payAmount})});
-    const d = await r.json();
-    if(d && d.url){ window.location.href = d.url; return; }
-    throw new Error('no url');
-  }catch(e){
-    payBtn.disabled = false; payBtn.textContent = 'hmm. try again →';
-    setTimeout(setPayLabel, 2500);
-  }
-}
-
 function openCheckout(withWheel){
   wheelwrap.hidden = !withWheel;
-  if(withWheel){ wheel.scrollTop = 0; lastIdx = 0; payAmount = AMOUNTS[0]; }
+  if(withWheel){ wheel.scrollTop = 0; lastIdx = 0; payAmount = AMOUNTS[0]; wheel.querySelectorAll('.wopt').forEach((el,i)=>el.classList.toggle('sel', i===0)); }
   else { payAmount = 1; }
   payAmtEl.textContent = '$' + fmt(payAmount);
   payNote.textContent = noteFor(payAmount);
-  if(withWheel) wheel.querySelectorAll('.wopt').forEach((el,i)=>el.classList.toggle('sel', i===0));
   paidStamp.classList.remove('show');
-  cardToggle.hidden = false; peEl.hidden = true; payBtn.hidden = true;
-  payDivider.style.display = '';
   payBtn.disabled = false; setPayLabel();
   overlay.classList.add('open');
-  try{
-    var s = document.getElementById('apStatus');
-    var hasAPS = (typeof window.ApplePaySession !== 'undefined');
-    var canPay = hasAPS && ApplePaySession.canMakePayments ? ApplePaySession.canMakePayments() : false;
-    var ua = navigator.userAgent;
-    var inApp = /Instagram|FBAN|FBAV|Line|TikTok|Snapchat|Telegram|FB_IAB/.test(ua);
-    var isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
-    if(canPay && !inApp){ s.textContent = '✓ Apple Pay is available — it should appear above'; s.style.color='#1a8a3a'; }
-    else if(inApp){ s.textContent = '⚠ open in Safari (in-app browsers block Apple Pay)'; s.style.color='#b00'; }
-    else if(!hasAPS || !isSafari){ s.textContent = '⚠ Apple Pay needs Safari on iPhone/Mac'; s.style.color='#b00'; }
-    else { s.textContent = '⚠ Apple Pay off: Settings → Safari → check Apple Pay, + add a card to Wallet'; s.style.color='#b00'; }
-  }catch(e){}
   setupPayment();
 }
 function closeCheckout(){ overlay.classList.remove('open'); }
@@ -788,28 +738,24 @@ document.getElementById('buy').addEventListener('click', ()=>openCheckout(false)
 document.getElementById('buyMore').addEventListener('click', ()=>openCheckout(true));
 document.getElementById('closePay').addEventListener('click', closeCheckout);
 overlay.addEventListener('click', e=>{ if(e.target===overlay) closeCheckout(); });
-
 payBtn.addEventListener('click', ()=>{
   if(DEMO){ paidStamp.classList.add('show'); tickSound(); setTimeout(closeCheckout, 900); return; }
-  if(stripe && elements){ doConfirm(); return; }
-  backupCheckout();
+  doConfirm();
 });
-document.getElementById('backupPay').addEventListener('click', backupCheckout);
-cardToggle.addEventListener('click', showCardForm);
 
 /* returning from a successful Stripe payment */
 if(new URLSearchParams(location.search).get('paid') === '1'){
   history.replaceState(null,'',location.pathname);
   overlay.classList.add('open');
   wheelwrap.hidden = true;
+  peEl.style.display = 'none';
   payBtn.style.display = 'none';
-  ecEl.style.display = 'none'; peEl.style.display = 'none'; payDivider.style.display = 'none'; cardToggle.hidden = true;
-  document.getElementById('backupPay').style.display = 'none';
   payAmtEl.textContent = 'you’re in.';
   payNote.textContent = 'payment received. the ticker felt it. welcome to history.';
   paidStamp.classList.add('show');
   tickSound();
 }
+
 
 /* poke the potato */
 document.getElementById('thePotato').addEventListener('click', tickSound);
