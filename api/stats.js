@@ -1,4 +1,5 @@
 let cache = { t: 0, data: null };
+
 export default async function handler(req, res) {
   try {
     if (cache.data && Date.now() - cache.t < 8000) {

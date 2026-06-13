@@ -6,6 +6,7 @@ export default async function handler(req, res) {
     const raw = (req.body && req.body.qty) || 1;
     const qty = Math.max(1, Math.min(100000, parseInt(raw, 10) || 1));
     const origin = req.headers.origin || 'https://million-dollar-potato.vercel.app';
+
     const params = new URLSearchParams();
     params.append('mode', 'payment');
     params.append('success_url', origin + '/?paid=1');
@@ -17,6 +18,7 @@ export default async function handler(req, res) {
     params.append('line_items[0][price_data][unit_amount]', '100');
     params.append('line_items[0][price_data][product_data][name]', 'The Million Dollar Potato - novelty certificate');
     params.append('line_items[0][price_data][product_data][description]', 'A numbered novelty digital certificate. Not a security. It is a potato.');
+
     const r = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
       headers: {
